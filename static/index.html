@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monika</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: #f9eef5;
+            font-family: 'Georgia', serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 20px;
+        }
+
+        /* Sprite area */
+        #sprite-container {
+            position: fixed;
+            bottom: 180px;
+            left: 50%;
+            transform: translateX(-50%);
+            height: 60vh;
+            pointer-events: none;
+        }
+
+        #sprite {
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Dialogue box */
+        #dialogue-box {
+            width: 100%;
+            max-width: 860px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 2px solid #e8b4d0;
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 12px;
+            min-height: 90px;
+            font-size: 1.05rem;
+            line-height: 1.7;
+            color: #3a2a3a;
+            position: relative;
+            z-index: 10;
+        }
+
+        #speaker-name {
+            font-weight: bold;
+            color: #c06090;
+            margin-bottom: 6px;
+            font-size: 0.95rem;
+            letter-spacing: 0.05em;
+        }
+
+        #response-text {
+            min-height: 1.7rem;
+        }
+
+        /* Input area */
+        #input-area {
+            width: 100%;
+            max-width: 860px;
+            display: flex;
+            gap: 10px;
+            position: relative;
+            z-index: 10;
+        }
+
+        #message-input {
+            flex: 1;
+            padding: 10px 16px;
+            border: 2px solid #e8b4d0;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 1rem;
+            background: white;
+            color: #3a2a3a;
+            resize: none;
+            min-height: 44px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        #message-input:focus {
+            outline: none;
+            border-color: #c06090;
+        }
+
+        #send-button {
+            padding: 10px 22px;
+            background: #e8b4d0;
+            border: none;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 1rem;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+            align-self: flex-end;
+        }
+
+        #send-button:hover { background: #c06090; }
+        #send-button:disabled { background: #ddd; cursor: default; }
+
+        /* Typing indicator */
+        #typing-indicator {
+            color: #c06090;
+            font-style: italic;
+            font-size: 0.9rem;
+            height: 1.2rem;
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sprite-container">
+        <!-- Drop a sprite image into static/sprites/ and update this src -->
+        <img id="sprite" src="/render/1eua"
+             onerror="this.style.display='none'" alt="Monika">
+    </div>
+
+    <div id="typing-indicator"></div>
+
+    <div id="dialogue-box">
+        <div id="speaker-name">Monika</div>
+        <div id="response-text">Hey, [player]! I've been waiting for you.</div>
+    </div>
+
+    <div id="input-area">
+        <textarea
+            id="message-input"
+            placeholder="Say something... (Shift+Enter for new line, Enter to send)"
+            rows="1"
+        ></textarea>
+        <button id="send-button">Send</button>
+    </div>
+
+    <script>
+        const input    = document.getElementById('message-input');
+        const button   = document.getElementById('send-button');
+        const response = document.getElementById('response-text');
+        const typing   = document.getElementById('typing-indicator');
+
+        // Auto-expand textarea
+        input.addEventListener('input', () => {
+            input.style.height = 'auto';
+            input.style.height = input.scrollHeight + 'px';
+        });
+
+        // Enter to send, Shift+Enter for newline
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        button.addEventListener('click', sendMessage);
+
+        async function sendMessage() {
+            const message = input.value.trim();
+            if (!message) return;
+
+            input.value = '';
+            input.style.height = 'auto';
+            button.disabled = true;
+            response.textContent = '';
+            typing.textContent = 'Monika is thinking...';
+
+            try {
+                const res = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                typing.textContent = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const lines = decoder.decode(value).split('\n');
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        const data = line.slice(6);
+                        if (data === '[DONE]') break;
+                        try {
+                            response.textContent += JSON.parse(data);
+                        } catch {}
+                    }
+                }
+            } catch (err) {
+                response.textContent = 'Something went wrong. Please try again.';
+                console.error(err);
+            } finally {
+                button.disabled = false;
+                input.focus();
+            }
+        }
+
+        // Store memory when the player closes the tab
+        window.addEventListener('beforeunload', () => {
+            navigator.sendBeacon('/end-session', '{}');
+        });
+    </script>
+</body>
+</html>
