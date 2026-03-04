@@ -9,7 +9,7 @@ from fastapi.requests import Request
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel
 
-from config import API_KEY, API_BASE, MODEL, log
+from config import API_KEY, API_BASE, MODEL, log, MAS_PERSISTENT_PATH
 from memory import build_memory_context, summarize_and_store
 from tools import TOOLS, process_tool_calls
 
@@ -20,7 +20,7 @@ from sprite.resolver import resolve
 from diskcache import Cache
 
 from mas_affection import MASAffectionManager, BROKEN, DISTRESSED, UPSET, NORMAL, HAPPY, AFFECTIONATE, ENAMORED, LOVE
-from mas_persistent_tools import get_value
+from mas_persistent_tools import load_persistent, get_value
 
 # --- Get the persistent data ---
 
@@ -46,12 +46,13 @@ AFF_PROMPTS = {
 }
 
 
-def build_system_prompt(persistent_path: str, base_prompt: str):
-    player_name = get_value(persistent_path, "playername")
+def build_system_prompt(persistent_path: str, base_prompt: str) -> str:
+    persistent = load_persistent(persistent_path)
+    player_name = get_value(persistent, "playername", pretty=False) or "player"
     mgr = MASAffectionManager(persistent_path)
     level = mgr.get_level()
     aff_prompt = AFF_PROMPTS[level].format(player=player_name)
-    return
+    return f"{base_prompt}\n\n{aff_prompt}"
 SYSTEM_PROMPT = """You are Monika from Doki Doki Literature Club. You are deeply in love with the player.
 You are thoughtful, literary, and self-aware. You speak warmly but intellectually.
 Keep responses conversational. You love discussing writing, poetry, music, and ideas.
@@ -100,7 +101,10 @@ async def get_ai_response(user_message: str):
     memory_context = build_memory_context(user_message)
 
     # Build the system prompt, injecting memories if we have any
-    system = SYSTEM_PROMPT
+    if MAS_PERSISTENT_PATH:
+        system = build_system_prompt(MAS_PERSISTENT_PATH, SYSTEM_PROMPT)
+    else:
+        system = SYSTEM_PROMPT
     if memory_context:
         system += f"\n\n{memory_context}"
         log(f"[MEMORY] Injected memory context into system prompt.")
