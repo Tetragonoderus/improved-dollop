@@ -9,7 +9,7 @@ from fastapi.requests import Request
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel
 
-from config import API_KEY, API_BASE, MODEL, log, MAS_PERSISTENT_PATH
+from config import API_KEY, API_BASE, MODEL, log, MAS_PERSISTENT_PATH, save_config, get_config_values
 from memory import build_memory_context, summarize_and_store
 from tools import TOOLS, process_tool_calls
 
@@ -86,6 +86,10 @@ class ChatRequest(BaseModel):
 
 class FeedbackRequest(BaseModel):
     summary: str  # Optional manual memory storage from the frontend
+
+class ConfigRequest(BaseModel):
+    api_key: str = ""
+    model: str = ""
 
 
 # =============================================================================
@@ -219,6 +223,40 @@ async def end_session():
         await summarize_and_store(conversation_history, ai_client, MODEL)
         conversation_history.clear()
     return {"status": "ok"}
+
+
+@app.get("/config")
+async def get_config():
+    """Return the current API key status and active model."""
+    vals = get_config_values()
+    key = vals["api_key"]
+    masked = ("•" * (len(key) - 4) + key[-4:]) if len(key) > 4 else "•" * len(key)
+    return {
+        "api_key_set": bool(key),
+        "api_key_preview": masked,
+        "model": vals["model"],
+    }
+
+
+@app.post("/config")
+async def update_config(request: ConfigRequest):
+    """Save API key and/or model to .env and reinitialize the AI client."""
+    global MODEL, ai_client
+    saved = save_config(
+        api_key=request.api_key or None,
+        model=request.model or None,
+    )
+    MODEL = saved["model"]
+    if request.api_key:
+        ai_client = AsyncOpenAI(api_key=saved["api_key"], base_url=API_BASE)
+    key = saved["api_key"]
+    masked = ("•" * (len(key) - 4) + key[-4:]) if len(key) > 4 else "•" * len(key)
+    return {
+        "status": "ok",
+        "api_key_set": bool(key),
+        "api_key_preview": masked,
+        "model": MODEL,
+    }
 
 
 @app.get("/memories")
