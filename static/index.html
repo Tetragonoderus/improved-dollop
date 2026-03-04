@@ -116,9 +116,165 @@
             height: 1.2rem;
             margin-bottom: 4px;
         }
+
+        /* Config toggle button */
+        #config-toggle {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid #e8b4d0;
+            border-radius: 6px;
+            width: 40px;
+            height: 40px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            z-index: 100;
+            transition: background 0.2s;
+            line-height: 1;
+        }
+        #config-toggle:hover { background: #e8b4d0; }
+
+        /* Modal overlay */
+        #config-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+        #config-overlay.open { display: flex; }
+
+        /* Modal box */
+        #config-modal {
+            background: #fff;
+            border: 2px solid #e8b4d0;
+            border-radius: 10px;
+            padding: 28px 32px;
+            width: 100%;
+            max-width: 440px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            color: #3a2a3a;
+        }
+        #config-modal h2 {
+            font-size: 1.2rem;
+            color: #c06090;
+            margin-bottom: 2px;
+        }
+        #config-modal label {
+            font-size: 0.9rem;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .config-field { display: flex; flex-direction: column; }
+        .api-key-row { display: flex; gap: 8px; }
+        .api-key-row input { flex: 1; }
+        #config-modal input[type="text"],
+        #config-modal input[type="password"] {
+            padding: 8px 12px;
+            border: 2px solid #e8b4d0;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            color: #3a2a3a;
+            background: #fff;
+        }
+        #config-modal input:focus {
+            outline: none;
+            border-color: #c06090;
+        }
+        .config-hint {
+            font-size: 0.8rem;
+            color: #999;
+            margin-top: 4px;
+        }
+        #config-modal .btn-secondary {
+            padding: 7px 14px;
+            background: #f9eef5;
+            border: 2px solid #e8b4d0;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            color: #c06090;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+        #config-modal .btn-secondary:hover { background: #e8b4d0; color: white; }
+        #config-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 4px;
+        }
+        #config-cancel {
+            padding: 9px 20px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            color: #666;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #config-cancel:hover { background: #ddd; }
+        #config-save {
+            padding: 9px 20px;
+            background: #e8b4d0;
+            border: none;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #config-save:hover { background: #c06090; }
+        #config-save:disabled { background: #ddd; cursor: default; }
+        #config-message {
+            font-size: 0.85rem;
+            min-height: 1.2rem;
+            color: #c06090;
+        }
+        #config-message.error { color: #c04040; }
     </style>
 </head>
 <body>
+
+    <button id="config-toggle" title="Settings">&#9881;</button>
+
+    <div id="config-overlay">
+        <div id="config-modal">
+            <h2>Settings</h2>
+
+            <div class="config-field">
+                <label for="config-api-key">OpenRouter API Key</label>
+                <div class="api-key-row">
+                    <input type="password" id="config-api-key" placeholder="Enter new API key...">
+                    <button type="button" class="btn-secondary" id="toggle-key-vis">Show</button>
+                </div>
+                <span class="config-hint" id="api-key-hint"></span>
+            </div>
+
+            <div class="config-field">
+                <label for="config-model">Model</label>
+                <input type="text" id="config-model" placeholder="e.g. gpt-4o-mini">
+            </div>
+
+            <div id="config-message"></div>
+
+            <div id="config-buttons">
+                <button id="config-cancel">Cancel</button>
+                <button id="config-save">Save</button>
+            </div>
+        </div>
+    </div>
 
     <div id="sprite-container">
         <!-- Drop a sprite image into static/sprites/ and update this src -->
@@ -211,6 +367,92 @@
         // Store memory when the player closes the tab
         window.addEventListener('beforeunload', () => {
             navigator.sendBeacon('/end-session', '{}');
+        });
+
+        // --- Config modal ---
+        const configToggle  = document.getElementById('config-toggle');
+        const configOverlay = document.getElementById('config-overlay');
+        const configApiKey  = document.getElementById('config-api-key');
+        const configModel   = document.getElementById('config-model');
+        const apiKeyHint    = document.getElementById('api-key-hint');
+        const toggleKeyVis  = document.getElementById('toggle-key-vis');
+        const configMsg     = document.getElementById('config-message');
+        const configSave    = document.getElementById('config-save');
+        const configCancel  = document.getElementById('config-cancel');
+
+        async function openConfigModal() {
+            configMsg.textContent = '';
+            configMsg.className = '';
+            configApiKey.value = '';
+            configApiKey.type = 'password';
+            toggleKeyVis.textContent = 'Show';
+            try {
+                const res = await fetch('/config');
+                const data = await res.json();
+                configModel.value = data.model || '';
+                apiKeyHint.textContent = data.api_key_set
+                    ? `Current key: ${data.api_key_preview}`
+                    : 'No API key set.';
+            } catch {
+                apiKeyHint.textContent = 'Could not load current settings.';
+            }
+            configOverlay.classList.add('open');
+        }
+
+        function closeConfigModal() {
+            configOverlay.classList.remove('open');
+        }
+
+        toggleKeyVis.addEventListener('click', () => {
+            if (configApiKey.type === 'password') {
+                configApiKey.type = 'text';
+                toggleKeyVis.textContent = 'Hide';
+            } else {
+                configApiKey.type = 'password';
+                toggleKeyVis.textContent = 'Show';
+            }
+        });
+
+        configToggle.addEventListener('click', openConfigModal);
+        configCancel.addEventListener('click', closeConfigModal);
+        configOverlay.addEventListener('click', (e) => {
+            if (e.target === configOverlay) closeConfigModal();
+        });
+
+        configSave.addEventListener('click', async () => {
+            const apiKey = configApiKey.value.trim();
+            const model  = configModel.value.trim();
+
+            if (!apiKey && !model) {
+                configMsg.textContent = 'Nothing to save.';
+                configMsg.className = '';
+                return;
+            }
+
+            configSave.disabled = true;
+            configMsg.textContent = 'Saving...';
+            configMsg.className = '';
+
+            try {
+                const res = await fetch('/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: apiKey, model })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Save failed');
+                configMsg.textContent = 'Settings saved!';
+                apiKeyHint.textContent = data.api_key_set
+                    ? `Current key: ${data.api_key_preview}`
+                    : 'No API key set.';
+                configApiKey.value = '';
+                setTimeout(closeConfigModal, 1200);
+            } catch (err) {
+                configMsg.textContent = err.message;
+                configMsg.className = 'error';
+            } finally {
+                configSave.disabled = false;
+            }
         });
     </script>
 </body>

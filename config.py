@@ -1,5 +1,6 @@
 import os
-from dotenv import load_dotenv
+from pathlib import Path
+from dotenv import load_dotenv, set_key as _dotenv_set_key
 
 load_dotenv()
 
@@ -31,3 +32,28 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 def log(x):
     if DEBUG:
         print(x)
+
+
+_DOTENV_PATH = str(Path(__file__).parent / ".env")
+
+
+def save_config(api_key: str | None = None, model: str | None = None) -> dict:
+    """Persist api_key and/or model to .env and return the updated values."""
+    Path(_DOTENV_PATH).touch()
+    if api_key:
+        _dotenv_set_key(_DOTENV_PATH, "OPENROUTER_API_KEY", api_key)
+    if model:
+        _dotenv_set_key(_DOTENV_PATH, "MODEL", model)
+    load_dotenv(_DOTENV_PATH, override=True)
+    return {
+        "api_key": os.getenv("OPENROUTER_API_KEY", ""),
+        "model": os.getenv("MODEL", "gpt-4o-mini"),
+    }
+
+
+def get_config_values() -> dict:
+    """Return the current runtime config values from environment."""
+    return {
+        "api_key": os.getenv("OPENROUTER_API_KEY", ""),
+        "model": os.getenv("MODEL", "gpt-4o-mini"),
+    }
