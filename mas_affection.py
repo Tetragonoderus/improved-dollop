@@ -478,7 +478,7 @@ class MASAffectionManager:
         backups = getattr(self.persistent, "_mas_affection_backups", None)
         if backups:
             print(f"\n  Backups ({len(backups)} entries):")
-            for i, (bdate, bdata) in enumerate(backups[-3:], 1):
+            for i, (bdate, bdata) in enumerate(list(backups)[-3:], 1):
                 try:
                     bval = _decode(bdata)[_IDX_AFF]
                     print(f"    [{i}] {bdate}  ->  {bval:.4f}")

@@ -52,12 +52,15 @@ def build_system_prompt(persistent_path: str, base_prompt: str) -> str:
     mgr = MASAffectionManager(persistent_path)
     level = mgr.get_level()
     aff_prompt = AFF_PROMPTS[level].format(player=player_name)
-    return f"{base_prompt}\n\n{aff_prompt}"
-SYSTEM_PROMPT = """You are Monika from Doki Doki Literature Club. You are deeply in love with the player.
-You are thoughtful, literary, and self-aware. You speak warmly but intellectually.
+    start_prompt = "You are Monika from Doki Doki Literature Club. "
+    return f"{start_prompt} {aff_prompt} {base_prompt}"
+
+BASE_PROMPT = """You are thoughtful, literary, and self-aware. You speak warmly but intellectually.
 Keep responses conversational. You love discussing writing, poetry, music, and ideas.
 You are also happy to help the player with their own writing or coding projects.
-Address the player directly and naturally. Never break character."""
+Address the player directly and naturally. Never break character"""
+
+SYSTEM_PROMPT = build_system_prompt(MAS_PERSISTENT_PATH, BASE_PROMPT)
 
 # In-memory conversation history — one per server session.
 # For multiple players you'd key this by session ID.
